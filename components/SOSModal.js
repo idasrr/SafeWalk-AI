@@ -1,49 +1,70 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { PhoneCall, MapPin, X, AlertTriangle } from 'lucide-react'
 
 export default function SOSModal({ trigger, contacts, location, onClose }) {
   const [countdown, setCountdown] = useState(5)
   const [called, setCalled]       = useState(false)
+  const timerRef                  = useRef(null)
 
   useEffect(() => {
-    if (!trigger) { setCountdown(5); setCalled(false); return }
+    // Reset setiap kali trigger berubah
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+
+    if (!trigger) {
+      setCountdown(5)
+      setCalled(false)
+      return
+    }
+
+    // Reset state dulu sebelum mulai countdown
+    setCountdown(5)
+    setCalled(false)
 
     const emergency = contacts?.find(c => c.type === 'keluarga') || contacts?.[0]
     const security  = contacts?.find(c => c.type === 'keamanan')
 
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          setCalled(true)
+    let current = 5
 
-          // Auto-call kontak utama via tel:
-          if (emergency?.phone) {
-            window.location.href = `tel:${emergency.phone.replace(/\s/g, '')}`
-          }
+    timerRef.current = setInterval(() => {
+      current -= 1
+      setCountdown(current)
 
-          // Buka WhatsApp ke kontak keamanan
-          setTimeout(() => {
-            const locText = location
-              ? `📍 Lokasi saya: https://maps.google.com/?q=${location.lat},${location.lng}`
-              : '📍 Lokasi tidak tersedia'
-            const msg = encodeURIComponent(
-              `🚨 *DARURAT - SafeWalk AI*\n\nSaya membutuhkan bantuan segera!\n${locText}\n\nHubungi saya sekarang.`
-            )
-            if (security?.phone) {
-              window.open(`https://wa.me/${security.phone.replace(/[^0-9]/g,'')}?text=${msg}`, '_blank')
-            }
-          }, 1500)
+      if (current <= 0) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+        setCalled(true)
 
-          return 0
+        // Auto-call kontak utama via tel:
+        if (emergency?.phone) {
+          window.location.href = `tel:${emergency.phone.replace(/\s/g, '')}`
         }
-        return prev - 1
-      })
+
+        // Kirim WhatsApp ke kontak keamanan
+        setTimeout(() => {
+          const locText = location
+            ? `📍 Lokasi saya: https://maps.google.com/?q=${location.lat},${location.lng}`
+            : '📍 Lokasi tidak tersedia'
+          const msg = encodeURIComponent(
+            `🚨 *DARURAT - SafeWalk AI*\n\nSaya membutuhkan bantuan segera!\n${locText}\n\nHubungi saya sekarang.`
+          )
+          if (security?.phone) {
+            window.open(`https://wa.me/${security.phone.replace(/[^0-9]/g,'')}?text=${msg}`, '_blank')
+          }
+        }, 1500)
+      }
     }, 1000)
 
-    return () => clearInterval(timer)
-  }, [trigger, contacts, location])
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [trigger])
 
   if (!trigger) return null
 
@@ -64,10 +85,7 @@ export default function SOSModal({ trigger, contacts, location, onClose }) {
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"
-          >
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
             <X size={16} className="text-white" />
           </button>
         </div>
@@ -121,10 +139,7 @@ export default function SOSModal({ trigger, contacts, location, onClose }) {
 
         {/* Batalkan */}
         {!called && (
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-2xl border border-white/20 text-white text-sm"
-          >
+          <button onClick={onClose} className="w-full py-3 rounded-2xl border border-white/20 text-white text-sm">
             Batalkan — Saya Aman
           </button>
         )}
